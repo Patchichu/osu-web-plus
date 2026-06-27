@@ -9,8 +9,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM.setValue
 // @grant        GM.getValue
-// @updateURL    https://github.com/Penguuuuu/osu-web-plus/main/main.js
-// @downloadURL  https://github.com/Penguuuuu/osu-web-plus/main/main.js
+// @updateURL    https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
+// @downloadURL  https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
 // ==/UserScript==
 
 (function() {
@@ -220,7 +220,6 @@
     }
 
     async function run() {
-
 
         async function setUserData() {
             const target = await helpers.getElement('.osu-layout__section--full .u-contents');
