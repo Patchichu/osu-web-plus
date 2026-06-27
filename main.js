@@ -31,6 +31,7 @@
 
         getScoresMap() {
             const key = `${userData.user.id}:${userData.current_mode}`;
+
             if (!userScoresMaps.has(key)) {
                 userScoresMaps.set(key, {
                     firsts: new Map(),
@@ -270,7 +271,7 @@
                 return 26_931_190_829 + 100_000_000_000 * (level - 100);
             }
 
-            function formatScore(score, isScoreNeeded = false) {
+            function formatScore(score) {
                 if (score < 1000) return `${score}`;
 
                 const suffixes = [
@@ -282,7 +283,7 @@
 
                 for (const [value, suffix] of suffixes) {
                     if (score >= value) {
-                        if (isScoreNeeded && score >= 100_000_000_000) {
+                        if (score >= 100_000_000_000) {
                             return `${Math.floor(score / value)}${suffix}`; // it looks nicer this way
                         }
 
@@ -302,7 +303,7 @@
             const neededScore = Math.round(cumulativeScoreNext - cumulativeScore);
             const currentScore = Math.floor(totalScore - cumulativeScore);
 
-            levelBarText.textContent = `${formatScore(currentScore)}/${formatScore(neededScore, true)} (${helpers.formatNumberToFixed(currentScore / neededScore * 100, 3)}%)`;
+            levelBarText.textContent = `${formatScore(currentScore)}/${formatScore(neededScore)} (${helpers.formatNumberToFixed(currentScore / neededScore * 100, 3)}%)`;
 
             let updated = false;
             levelBarContainer.addEventListener('mouseenter', async () => {
