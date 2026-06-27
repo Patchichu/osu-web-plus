@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.2
+// @version      0.0.3
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -19,6 +19,7 @@
     const mutationObservers = [];
     const userScoresMaps = new Map();
     let userData = null;
+    let xhrCaptureSet = false;
 
     const helpers = {
         createObserver(...args) {
@@ -28,14 +29,10 @@
             return observer;
         },
 
-        getUserId() {
-            const match = window.location.pathname.match(/^\/users\/(\d+)/);
-            return match ? match[1] : null;
-        },
-
-        getScoresMap(userId) {
-            if (!userScoresMaps.has(userId)) {
-                userScoresMaps.set(userId, {
+        getScoresMap() {
+            const key = `${userData.user.id}:${userData.current_mode}`;
+            if (!userScoresMaps.has(key)) {
+                userScoresMaps.set(key, {
                     firsts: new Map(),
                     best: new Map(),
                     pinned: new Map(),
@@ -44,7 +41,7 @@
                 });
             }
 
-            return userScoresMaps.get(userId);
+            return userScoresMaps.get(key);
         },
 
         getElement(element) {
@@ -133,8 +130,8 @@
             }
         };
 
-        function clearScoresMapKeys(userId, ...keys) {
-            const scoresMap = helpers.getScoresMap(userId);
+        function clearScoresMapKeys(...keys) {
+            const scoresMap = helpers.getScoresMap();
             for (const key of keys) {
                 scoresMap[key].clear();
             }
@@ -144,8 +141,7 @@
         XMLHttpRequest.prototype.open = function (method, url) {
             this.addEventListener('load', async () => {
                 if (url.includes('reorder')) {
-                    const userId = helpers.getUserId();
-                    const scoresMap = helpers.getScoresMap(userId);
+                    const scoresMap = helpers.getScoresMap();
                     const pinnedSection = (await helpers.getElementByText('.title--page-extra-small', 'Pinned Scores')).nextElementSibling;
                     const pinnedContainers = pinnedSection.querySelectorAll('.play-detail');
 
@@ -166,8 +162,7 @@
 
                 if (url.includes('score-pins')) {
                     const scoreId = Number(url.split('/').pop());
-                    const userId = helpers.getUserId();
-                    const scoresMap = helpers.getScoresMap(userId);
+                    const scoresMap = helpers.getScoresMap();
                     const isDeleteMethod = method === 'DELETE';
 
                     for (const mapKey of isDeleteMethod ? ['pinned'] : ['best', 'firsts', 'recent', 'replays']) {
@@ -191,11 +186,10 @@
                 if (!this.responseText || this.status === 204) return; // above responses have no data so this needs to be below
 
                 const data = JSON.parse(this.responseText);
-                const userId = helpers.getUserId();
-                const scoresMap = helpers.getScoresMap(userId);
+                const scoresMap = helpers.getScoresMap();
 
                 if (url.includes('top_ranks')) {
-                    clearScoresMapKeys(userId, 'firsts', 'best', 'pinned');
+                    clearScoresMapKeys('firsts', 'best', 'pinned');
 
                     pushDataToMap(scoresMap.firsts, data.firsts?.items);
                     pushDataToMap(scoresMap.best, data.best?.items);
@@ -217,7 +211,7 @@
                 }
 
                 if (url.includes('extra-pages/historical')) {
-                    clearScoresMapKeys(userId, 'recent', 'replays');
+                    clearScoresMapKeys('recent', 'replays');
 
                     pushDataToMap(scoresMap.recent, data.recent.items);
                     pushDataToMap(scoresMap.replays, data.score_replay_stats.items, true);
@@ -242,6 +236,7 @@
         async function setUserData() {
             const target = await helpers.getElement('.osu-layout__section--full .u-contents');
             userData = JSON.parse(target.dataset.initialData);
+            console.log(userData);
         }
 
         async function updateStatsContainerDisplay() {
@@ -440,7 +435,7 @@
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Fix pinned reordering issues</li>
+                        <li>- Fix issues caused by switching modes</li>
                     </ul>
                 `;
 
@@ -489,6 +484,12 @@
 
             if (window.location.pathname.startsWith('/users/')) {
                 await setUserData();
+
+                if (!xhrCaptureSet) {
+                    setXHRCapture();
+                    xhrCaptureSet = true;
+                }
+
                 await updateStatsContainerDisplay();
                 await updateLevelBar();
                 await updateMedalCount();
@@ -502,12 +503,12 @@
         }
     }
 
-    function setScoreSection(section, scores, reverse = false) {
+    function setScoreSection(section, scores, eventName) {
         if (!scores?.size) return;
 
         const scoreContainers = section.querySelectorAll('.play-detail');
         const scoreValues = [...scores.values()];
-        if (reverse) scoreValues.reverse();
+        if (eventName === 'scores:pinned-added') scoreValues.reverse();
 
         for (let i = 0; i < scoreContainers.length; i++) {
             const score = scoreValues[i];
@@ -544,65 +545,83 @@
         }
     }
 
-    function setScoreSectionEventListener(eventName, sections, observe = true, reverse = false) {
+    function setScoreSectionEventListener(eventName, sections, observe = true) {
         window.addEventListener(eventName, async () => {
-            const userId = helpers.getUserId();
-            const scoresMap = helpers.getScoresMap(userId);
+            const scoresMap = helpers.getScoresMap();
 
-            for (const { sectionName, mapKey } of sections) {
+            for (const [sectionName, mapKey] of sections) {
                 const section = (await helpers.getElementByText('.title--page-extra-small', sectionName)).nextElementSibling;
 
                 if (observe) {
                     const observer = helpers.createObserver(() => {
                         observer.disconnect();
-                        setScoreSection(section, scoresMap[mapKey], reverse);
+                        setScoreSection(section, scoresMap[mapKey], eventName);
                     });
 
                     observer.observe(section, { childList: true, subtree: true });
                 } else {
-                    setScoreSection(section, scoresMap[mapKey], reverse);
+                    setScoreSection(section, scoresMap[mapKey], eventName);
                 }
             }
         });
     }
 
+    const eventList = [
+        {
+            eventName: 'scores:tops-updated',
+            sections: [['Best Performance', 'best'], ['First Place Ranks', 'firsts'], ['Pinned Scores', 'pinned']],
+            observe: false
+        },
+        {
+            eventName: 'scores:pinned-updated',
+            sections: [['Pinned Scores', 'pinned']]
+        },
+        {
+            eventName: 'scores:pinned-added',
+            sections: [['Pinned Scores', 'pinned']]
+        },
+        {
+            eventName: 'scores:best-updated',
+            sections: [['Best Performance', 'best']]
+        },
+        {
+            eventName: 'scores:firsts-updated',
+            sections: [['First Place Ranks', 'firsts']]
+        },
+        {
+            eventName: 'scores:historical-updated',
+            sections: [['Recent Plays', 'recent'], ['Most Watched Replays', 'replays']],
+            observe: false
+        },
+        {
+            eventName: 'scores:replays-updated',
+            sections: [['Most Watched Replays', 'replays']]
+        },
+        {
+            eventName: 'scores:recent-updated',
+            sections: [['Recent Plays', 'recent']]
+        },
+    ];
+
     async function reapplyScoreSections() {
-        const userId = helpers.getUserId();
-        const scoresMap = helpers.getScoresMap(userId);
-        const sections = [
-            { sectionName: 'Best Performance', mapKey: 'best' },
-            { sectionName: 'First Place Ranks', mapKey: 'firsts' },
-            { sectionName: 'Pinned Scores', mapKey: 'pinned' },
-            { sectionName: 'Recent Plays', mapKey: 'recent' },
-            { sectionName: 'Most Watched Replays', mapKey: 'replays' }
-        ];
+        const scoresMap = helpers.getScoresMap();
+        const seenSections = new Set(); // because duplicate sections
 
-        for (const { sectionName, mapKey } of sections) {
-            if (scoresMap[mapKey].size === 0) continue;
+        for (const { eventName, sections } of eventList) {
+            for (const [sectionName, mapKey] of sections) {
+                if (seenSections.has(sectionName) || scoresMap[mapKey].size === 0) continue;
+                seenSections.add(sectionName);
 
-            const section = (await helpers.getElementByText('.title--page-extra-small', sectionName)).nextElementSibling;
-            setScoreSection(section, scoresMap[mapKey]);
+                const section = (await helpers.getElementByText('.title--page-extra-small', sectionName)).nextElementSibling;
+                setScoreSection(section, scoresMap[mapKey], eventName);
+            }
         }
     }
 
-    setScoreSectionEventListener('scores:tops-updated', [
-        { sectionName: 'Best Performance', mapKey: 'best' },
-        { sectionName: 'First Place Ranks', mapKey: 'firsts' },
-        { sectionName: 'Pinned Scores', mapKey: 'pinned' }],
-        false
-    );
-    setScoreSectionEventListener('scores:pinned-updated', [{ sectionName: 'Pinned Scores', mapKey: 'pinned' }]);
-    setScoreSectionEventListener('scores:pinned-added', [{ sectionName: 'Pinned Scores', mapKey: 'pinned' }], true, true);
-    setScoreSectionEventListener('scores:best-updated', [{ sectionName: 'Best Performance', mapKey: 'best' }]);
-    setScoreSectionEventListener('scores:firsts-updated', [{ sectionName: 'First Place Ranks', mapKey: 'firsts' }]);
-    setScoreSectionEventListener('scores:historical-updated', [
-        { sectionName: 'Recent Plays', mapKey: 'recent' },
-        { sectionName: 'Most Watched Replays', mapKey: 'replays' }],
-        false
-    );
-    setScoreSectionEventListener('scores:replays-updated', [{ sectionName: 'Most Watched Replays', mapKey: 'replays' }]);
-    setScoreSectionEventListener('scores:recent-updated', [{ sectionName: 'Recent Plays', mapKey: 'recent' }]);
-    setXHRCapture();
+    for (const { eventName, sections, observe } of eventList) {
+        setScoreSectionEventListener(eventName, sections, observe);
+    }
+
     run();
     document.addEventListener('turbo:load', async () => {
         mutationObservers.forEach(observer => observer.disconnect());
