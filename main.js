@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.1
+// @version      0.0.2
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -144,7 +144,28 @@
 
         const xhrCapture = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function (method, url) {
-            this.addEventListener('load', () => {
+            this.addEventListener('load', async () => {
+                if (url.includes('reorder')) {
+                    const userId = helpers.getUserId();
+                    const scoresMap = helpers.getScoresMap(userId);
+                    const pinnedSection = (await helpers.getElementByText('.title--page-extra-small', 'Pinned Scores')).nextElementSibling;
+                    const pinnedContainers = pinnedSection.querySelectorAll('.play-detail');
+
+                    const newPinnedMap = new Map();
+                    for (const pinnedContainer of pinnedContainers) {
+                        for (const [key, score] of scoresMap.pinned) {
+                            if (score.id === Number(pinnedContainer.dataset.scoreId)) {
+                                newPinnedMap.set(key, score);
+                                break;
+                            }
+                        }
+                    }
+
+                    scoresMap.pinned = newPinnedMap;
+                    window.dispatchEvent(new Event('scores:pinned-reordered'));
+                    return;
+                }
+
                 if (url.includes('score-pins')) {
                     const scoreId = Number(url.split('/').pop());
                     const userId = helpers.getUserId();
@@ -161,7 +182,7 @@
                                 scoresMap.pinned.set(key, score);
                             }
 
-                            window.dispatchEvent(new Event('scores:pinned-updated'));
+                            window.dispatchEvent(new Event('scores:pinned-added'));
                             return;
                         }
                     }
@@ -169,7 +190,7 @@
                     return;
                 }
 
-                if (!this.responseText || this.status === 204) return; // score--pins has no data so this needs to be below
+                if (!this.responseText || this.status === 204) return; // above responses have no data so this needs to be below
 
                 const data = JSON.parse(this.responseText);
                 const userId = helpers.getUserId();
@@ -220,7 +241,6 @@
     }
 
     async function run() {
-
         async function setUserData() {
             const target = await helpers.getElement('.osu-layout__section--full .u-contents');
             userData = JSON.parse(target.dataset.initialData);
@@ -418,7 +438,7 @@
                 <b>Version:</b> ${versionText}<br>
                 <b>Notes:</b><br>
                 <ul style="list-style: none; padding-left: 10px;">
-                    <li>- Initial commit</li>
+                    <li>- Fix pinned reordering issues</li>
                 </ul>
             `;
 
@@ -433,7 +453,7 @@
 
             const link = document.createElement('a');
             link.classList.add('link-popup-osuwebplus');
-            link.href = 'https://github.com/Penguuuuu/osu-web-plus/commits/main';
+            link.href = 'https://github.com/Penguuuuu/osu-web-plus';
             link.textContent = 'Source';
             link.target = '_blank';
 
@@ -476,19 +496,22 @@
         }
     }
 
-    function setScoreSection(section, scores) {
+    function setScoreSection(section, scores, reverse = false) {
         if (!scores?.size) return;
 
         const scoreContainers = section.querySelectorAll('.play-detail');
+        const scoreValues = [...scores.values()];
+        if (reverse) scoreValues.reverse();
 
-        let i = 0;
-        for (const score of scores.values()) {
-            const container = scoreContainers[i++];
-            if (!container) return;
+        for (let i = 0; i < scoreContainers.length; i++) {
+            const score = scoreValues[i];
+            if (!score) return;
+
+            const container = scoreContainers[i];
+            if (container.dataset.scoreId) continue;
+            container.dataset.scoreId = score.id;
 
             const title = container.querySelector('.play-detail__title');
-            if (title.parentElement.querySelector('.play-detail__score')) continue;
-
             const comboText = `${score.max_combo.toLocaleString()}x`;
 
             const scoreDetails = document.createElement('div');
@@ -515,7 +538,7 @@
         }
     }
 
-    function setScoreSectionEventListener(eventName, sections, observe = true) {
+    function setScoreSectionEventListener(eventName, sections, observe = true, reverse = false) {
         window.addEventListener(eventName, async () => {
             const userId = helpers.getUserId();
             const scoresMap = helpers.getScoresMap(userId);
@@ -526,12 +549,12 @@
                 if (observe) {
                     const observer = helpers.createObserver(() => {
                         observer.disconnect();
-                        setScoreSection(section, scoresMap[mapKey]);
+                        setScoreSection(section, scoresMap[mapKey], reverse);
                     });
 
                     observer.observe(section, { childList: true, subtree: true });
                 } else {
-                    setScoreSection(section, scoresMap[mapKey]);
+                    setScoreSection(section, scoresMap[mapKey], reverse);
                 }
             }
         });
@@ -563,6 +586,7 @@
         false
     );
     setScoreSectionEventListener('scores:pinned-updated', [{ sectionName: 'Pinned Scores', mapKey: 'pinned' }]);
+    setScoreSectionEventListener('scores:pinned-added', [{ sectionName: 'Pinned Scores', mapKey: 'pinned' }], true, true);
     setScoreSectionEventListener('scores:best-updated', [{ sectionName: 'Best Performance', mapKey: 'best' }]);
     setScoreSectionEventListener('scores:firsts-updated', [{ sectionName: 'First Place Ranks', mapKey: 'firsts' }]);
     setScoreSectionEventListener('scores:historical-updated', [
