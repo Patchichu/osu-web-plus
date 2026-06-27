@@ -19,8 +19,6 @@
     const mutationObservers = [];
     const userScoresMaps = new Map();
     let userData = null;
-    let titleText = null;
-    let versionText = null;
 
     const helpers = {
         createObserver(...args) {
@@ -395,91 +393,99 @@
             window.dispatchEvent(new Event('resize'));
         }
 
-        function displayPopup() {
-            const style = document.createElement('style');
-            style.textContent = `
-                .popup-osuwebplus {
-                    width: 300px;
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    padding: 15px 10px;
-                    background-color: hsl(var(--hsl-b4));
-                    color: hsl(var(--hsl-c1));
-                    border: 1px solid hsl(var(--hsl-b3));
-                    border-radius: 6px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,.5);
-                    z-index: 1000;
-                }
-                .button-popup-osuwebplus {
-                    padding: 4px 8px;
-                    color: #fff;
-                    border: none;
-                    background-color: hsl(var(--hsl-h2));
-                    border-radius: 5px;
-                }
-                .button-popup-osuwebplus:hover {
-                    text-decoration: underline;
-                }
-                .link-popup-osuwebplus {
-                    margin-left: 5px;
-                    color: hsl(var(--hsl-l1));
-                }
-                .link-popup-osuwebplus:hover {
-                    text-decoration: underline;
-                }
-            `;
-            document.head.appendChild(style);
+        async function setPopup() {
+            let popuptitleText = null;
+            let popupVersionText = null;
 
-            const popup = document.createElement('div');
-            popup.classList.add('popup-osuwebplus');
-            popup.innerHTML = `
-                <b>${titleText}</b><br>
-                <b>Version:</b> ${versionText}<br>
-                <b>Notes:</b><br>
-                <ul style="list-style: none; padding-left: 10px;">
-                    <li>- Fix pinned reordering issues</li>
-                </ul>
-            `;
+            function createPopup(){
+                const style = document.createElement('style');
+                style.textContent = `
+                    .popup-osuwebplus {
+                        width: 300px;
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        padding: 15px 10px;
+                        background-color: hsl(var(--hsl-b4));
+                        color: hsl(var(--hsl-c1));
+                        border: 1px solid hsl(var(--hsl-b3));
+                        border-radius: 6px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,.5);
+                        z-index: 1000;
+                    }
+                    .button-popup-osuwebplus {
+                        padding: 4px 8px;
+                        color: #fff;
+                        border: none;
+                        background-color: hsl(var(--hsl-h2));
+                        border-radius: 5px;
+                    }
+                    .button-popup-osuwebplus:hover {
+                        text-decoration: underline;
+                    }
+                    .link-popup-osuwebplus {
+                        margin-left: 5px;
+                        color: hsl(var(--hsl-l1));
+                    }
+                    .link-popup-osuwebplus:hover {
+                        text-decoration: underline;
+                    }
+                `;
+                document.head.appendChild(style);
 
-            const button = document.createElement('button');
-            button.classList.add('button-popup-osuwebplus');
-            button.textContent = 'Close';
-            button.onclick = async () => {
-                await GM.setValue('popupClosed', true);
-                await GM.setValue('oldVersion', GM_info.script.version);
-                popup.remove();
-            };
+                const popup = document.createElement('div');
+                popup.classList.add('popup-osuwebplus');
+                popup.innerHTML = `
+                    <b>${popuptitleText}</b><br>
+                    <b>Version:</b> ${popupVersionText}<br>
+                    <b>Notes:</b><br>
+                    <ul style="list-style: none; padding-left: 10px;">
+                        <li>- Fix pinned reordering issues</li>
+                    </ul>
+                `;
 
-            const link = document.createElement('a');
-            link.classList.add('link-popup-osuwebplus');
-            link.href = 'https://github.com/Penguuuuu/osu-web-plus';
-            link.textContent = 'Source';
-            link.target = '_blank';
+                const button = document.createElement('button');
+                button.classList.add('button-popup-osuwebplus');
+                button.textContent = 'Close';
+                button.onclick = async () => {
+                    await GM.setValue('popupClosed', true);
+                    await GM.setValue('oldVersion', GM_info.script.version);
+                    popup.remove();
+                };
 
-            popup.append(button, link);
-            document.body.appendChild(popup);
-        }
+                const link = document.createElement('a');
+                link.classList.add('link-popup-osuwebplus');
+                link.href = 'https://github.com/Penguuuuu/osu-web-plus';
+                link.textContent = 'Source';
+                link.target = '_blank';
 
-        try {
+                popup.append(button, link);
+                document.body.appendChild(popup);
+            }
+
             const currentVersion = GM_info.script.version;
             const oldVersion = await GM.getValue('oldVersion', 0);
             const popupClosed = await GM.getValue('popupClosed', true);
 
-            if (oldVersion !== currentVersion || !popupClosed) {
-                await GM.setValue('popupClosed', false);
+            if (oldVersion === currentVersion && popupClosed) return;
 
-                if (!oldVersion) {
-                    versionText = currentVersion;
-                    titleText = 'osu! Web+ Installed!';
-                }
-                else {
-                    versionText = `${oldVersion} > ${currentVersion}`;
-                    titleText = 'osu! Web+ Updated!';
-                }
+            await GM.setValue('popupClosed', false);
 
-                displayPopup();
+            if (!oldVersion) {
+                popupVersionText = currentVersion;
+                popuptitleText = 'osu! Web+ Installed!';
+            } else {
+                popupVersionText = `${oldVersion} > ${currentVersion}`;
+                popuptitleText = 'osu! Web+ Updated!';
             }
+
+            createPopup();
+        }
+
+        try {
+            console.log(`Page loaded (${window.location.href})`);
+
+            await setPopup();
 
             if (window.location.pathname.startsWith('/users/')) {
                 await setUserData();
@@ -490,7 +496,7 @@
                 await setStats();
             }
 
-            console.log(`Page loaded (${window.location.href})`);
+            console.log(`Finished run`);
         } catch(error) {
             console.log(error);
         }
