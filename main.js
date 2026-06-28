@@ -355,7 +355,7 @@
             const valueDisplay = (await helpers.getElementByText('.value-display__label', 'pp')).closest('.value-display');
 
             if (valueDisplay) {
-                valueDisplay.querySelector('.value-display__value').textContent = userData.user.statistics.pp
+                valueDisplay.querySelector('.value-display__value').textContent = helpers.formatNumberToFixed(userData.user.statistics.pp);
             }
         }
 
