@@ -9,8 +9,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM.setValue
 // @grant        GM.getValue
-// @updateURL    https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
-// @downloadURL  https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
+// @updateURL    https://raw.githubusercontent.com/Patchichu/osu-web-plus/refs/heads/main/main.js
+// @downloadURL  https://raw.githubusercontent.com/Patchichu/osu-web-plus/refs/heads/main/main.js
 // ==/UserScript==
 
 (function() {
@@ -451,7 +451,7 @@
 
                 const link = document.createElement('a');
                 link.classList.add('link-popup-osuwebplus');
-                link.href = 'https://github.com/Penguuuuu/osu-web-plus';
+                link.href = 'https://github.com/Patchichu/osu-web-plus';
                 link.textContent = 'Source';
                 link.target = '_blank';
 
