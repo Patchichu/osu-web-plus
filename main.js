@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.3
+// @version      0.0.4
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -9,8 +9,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM.setValue
 // @grant        GM.getValue
-// @updateURL    https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
-// @downloadURL  https://raw.githubusercontent.com/Penguuuuu/osu-web-plus/refs/heads/main/main.js
+// @updateURL    https://raw.githubusercontent.com/Patchichu/osu-web-plus/refs/heads/main/main.js
+// @downloadURL  https://raw.githubusercontent.com/Patchichu/osu-web-plus/refs/heads/main/main.js
 // ==/UserScript==
 
 (function() {
@@ -120,6 +120,14 @@
         formatNumberToFixed(value, decimals = 2) {
             const decimalShift = 10 ** decimals;
             return (Math.floor(value * decimalShift) / decimalShift).toFixed(decimals);
+        },
+
+        isLazer() {
+            if(document.querySelector("button[data-url=\"https://osu.ppy.sh/home/account/options?user_profile_customization%5Blegacy_score_only%5D=1\"] span.fas")) {
+                return true;
+            }
+
+            return false;
         }
     }
 
@@ -240,7 +248,7 @@
             console.log(userData);
         }
 
-        async function updateStatsContainerDisplay() {
+        async function setProfileStatsContainer() {
             const profileStatsContainer = await helpers.getElement('.profile-detail-stats');
             const profileStatsContainerInner = profileStatsContainer.querySelector(':scope > div');
             profileStatsContainerInner.style.display = 'flex';
@@ -249,7 +257,30 @@
             profileStatsContainerInner.style.justifyContent = 'space-between';
         }
 
-        async function updateMedalCount() {
+        async function setModeIcons() {
+            const osu = await helpers.getElement('.fa-extra-mode-osu');
+            osu.style.color = '#ff97c5';
+
+            const taiko = await helpers.getElement('.fa-extra-mode-taiko');
+            taiko.style.color = '#97dfff';
+
+            const fruits = await helpers.getElement('.fa-extra-mode-fruits');
+            fruits.style.color = '#97ffa2';
+
+            const mania = await helpers.getElement('.fa-extra-mode-mania');
+            mania.style.color = '#ffff97';
+
+            const icons = [osu, taiko, fruits, mania];
+
+            for (const icon of icons) {
+                const link = icon.closest('.game-mode-link');
+                if (link && !link.classList.contains('game-mode-link--active')) {
+                    icon.style.opacity = '0.5';
+                }
+            }
+        }
+
+        async function setMedalCount() {
             await helpers.getElement('.value-display__label');
 
             const valueDisplay = (await helpers.getElementByText('.value-display__label', 'Medals')).closest('.value-display');
@@ -260,7 +291,7 @@
             }
         }
 
-        async function updateLevelBar() {
+        async function setLevelBar() {
             function levelToScore(level) {
                 if (level <= 100) {
                     if (level > 1) {
@@ -312,13 +343,13 @@
                 const tooltipId = await helpers.getElementAttribute(levelBarContainer, 'aria-describedby');
                 const tooltipContent = await helpers.getElement(`#${tooltipId}-content`);
 
-                tooltipContent.textContent = `${(neededScore - currentScore).toLocaleString()} remaining`;
+                tooltipContent.textContent = `${(neededScore - currentScore).toLocaleString('en-US')} remaining`;
 
                 updated = true;
             });
         }
 
-        async function updatePPCount() {
+        async function setPPCount() {
             await helpers.getElement('.value-display__label');
 
             const valueDisplay = (await helpers.getElementByText('.value-display__label', 'pp')).closest('.value-display');
@@ -332,18 +363,38 @@
             const hitsPerPlayContainerValue = await helpers.getElement('.profile-stats__entry--key-hits_per_play .profile-stats__value');
             hitsPerPlayContainerValue.textContent = helpers.formatNumberToFixed(userData.user.statistics.total_hits / userData.user.statistics.play_count, 4);
 
+            const lazer = helpers.isLazer();
             const totalHitsContainer = await helpers.getElement('.profile-stats__entry--key-total_hits');
-            const hits = [
-                { name: 'Miss', value: userData.user.statistics.count_miss, className: 'hit_0' },
-                { name: '50x', value: userData.user.statistics.count_50, className: 'hit_50' },
-                { name: '100x', value: userData.user.statistics.count_100, className: 'hit_100' },
-                { name: '300x', value: userData.user.statistics.count_300, className: 'hit_300' }
-            ];
+            const hits = {
+                osu: [
+                    { name: lazer ? 'Great' : '300x', value: userData.user.statistics.count_300, className: 'hit_300' },
+                    { name: lazer ? 'Ok' : '100x', value: userData.user.statistics.count_100, className: 'hit_100' },
+                    { name: lazer ? 'Meh' : '50x', value: userData.user.statistics.count_50, className: 'hit_50' },
+                    { name: 'Miss', value: userData.user.statistics.count_miss, className: 'hit_0' },
+                ],
+                taiko: [
+                    { name: 'Great', value: userData.user.statistics.count_300, className: 'hit_300' },
+                    { name: 'Ok', value: userData.user.statistics.count_100, className: 'hit_100' },
+                    { name: 'Miss', value: userData.user.statistics.count_miss, className: 'hit_0' },
+                ],
+                fruits: [
+                    { name: lazer ? 'Great' : 'Fruit', value: userData.user.statistics.count_300, className: 'hit_300' },
+                    { name: lazer ? 'Ok' : 'Drop', value: userData.user.statistics.count_100, className: 'hit_100' },
+                    { name: lazer ? 'Meh' : 'Droplet', value: userData.user.statistics.count_50, className: 'hit_50' },
+                    { name: 'Miss', value: userData.user.statistics.count_miss, className: 'hit_0' },
+                ],
+                mania: [
+                    { name: 'Perfect / Great / Good', value: userData.user.statistics.count_300, className: 'hit_300' },
+                    { name: 'Ok', value: userData.user.statistics.count_100, className: 'hit_100' },
+                    { name: lazer ? 'Meh' : 'Poor', value: userData.user.statistics.count_50, className: 'hit_50' },
+                    { name: 'Miss', value: userData.user.statistics.count_miss, className: 'hit_0' },
+                ],
+            };
 
-            for (const { name, value, className } of hits) {
+            for (const { name, value, className } of hits[userData.current_mode].toReversed()) {
                 const hitContainer = createStat(
                     name,
-                    `${value.toLocaleString()} (${helpers.formatNumberToFixed(value / (userData.user.statistics.count_300 + userData.user.statistics.count_100 + userData.user.statistics.count_50 + userData.user.statistics.count_miss) * 100, 2)}%)`,
+                    `${value.toLocaleString('en-US')} (${helpers.formatNumberToFixed(value / userData.user.statistics.total_hits * 100, 2)}%)`,
                     className
                 );
                 totalHitsContainer.after(hitContainer);
@@ -352,7 +403,7 @@
             const rankedScoreContainer = await helpers.getElement('.profile-stats__entry--key-ranked_score');
             const rankedScorePerPlay = createStat(
                 'Ranked Score Per Play',
-                Math.floor((userData.user.statistics.ranked_score / userData.user.statistics.play_count)).toLocaleString(),
+                Math.floor((userData.user.statistics.ranked_score / userData.user.statistics.play_count)).toLocaleString('en-US'),
                 'ranked_score_per_play'
             );
             rankedScoreContainer.after(rankedScorePerPlay);
@@ -360,7 +411,7 @@
             const totalScoreContainer = await helpers.getElement('.profile-stats__entry--key-total_score');
             const totalScorePerPlay = createStat(
                 'Total Score Per Play',
-                Math.floor((userData.user.statistics.total_score / userData.user.statistics.play_count)).toLocaleString(),
+                Math.floor((userData.user.statistics.total_score / userData.user.statistics.play_count)).toLocaleString('en-US'),
                 'total_score_per_play'
             );
             totalScoreContainer.after(totalScorePerPlay);
@@ -401,47 +452,42 @@
                         position: fixed;
                         top: 20px;
                         right: 20px;
-                        padding: 15px 10px;
-                        background-color: hsl(var(--hsl-b4));
-                        color: hsl(var(--hsl-c1));
-                        border: 1px solid hsl(var(--hsl-b3));
-                        border-radius: 6px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,.5);
+                        font-size: 14px;
                         z-index: 1000;
                     }
-                    .button-popup-osuwebplus {
-                        padding: 4px 8px;
-                        color: #fff;
-                        border: none;
-                        background-color: hsl(var(--hsl-h2));
-                        border-radius: 5px;
-                    }
-                    .button-popup-osuwebplus:hover {
-                        text-decoration: underline;
+                    .actions-wrapper-popup-osuwebplus {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
                     }
                     .link-popup-osuwebplus {
-                        margin-left: 5px;
                         color: hsl(var(--hsl-l1));
-                    }
-                    .link-popup-osuwebplus:hover {
-                        text-decoration: underline;
+                        font-size: 12px;
+                        font-weight: bold;
                     }
                 `;
                 document.head.appendChild(style);
 
                 const popup = document.createElement('div');
+                popup.classList.add('notification-popup');
                 popup.classList.add('popup-osuwebplus');
                 popup.innerHTML = `
                     <b>${popuptitleText}</b><br>
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Fix issues caused by switching modes</li>
+                        <li>- Match popup size to osu page</li>
+                        <li>- Add coloured mode icons for profile page</li>
+                        <li>- Add mode/lazer based hit-type labels to profile stats</li>
+                        <li>- Add lazer score for score details (if lazer mode is enabled)</li>
                     </ul>
                 `;
 
+                const actionsWrapper = document.createElement('div');
+                actionsWrapper.classList.add('actions-wrapper-popup-osuwebplus');
+
                 const button = document.createElement('button');
-                button.classList.add('button-popup-osuwebplus');
+                button.classList.add('btn-osu-big');
                 button.textContent = 'Close';
                 button.onclick = async () => {
                     await GM.setValue('popupClosed', true);
@@ -451,11 +497,12 @@
 
                 const link = document.createElement('a');
                 link.classList.add('link-popup-osuwebplus');
-                link.href = 'https://github.com/Penguuuuu/osu-web-plus';
+                link.href = 'https://github.com/Patchichu/osu-web-plus';
                 link.textContent = 'Source';
                 link.target = '_blank';
 
-                popup.append(button, link);
+                actionsWrapper.append(button, link);
+                popup.append(actionsWrapper);
                 document.body.appendChild(popup);
             }
 
@@ -491,10 +538,11 @@
                     xhrCaptureSet = true;
                 }
 
-                await updateStatsContainerDisplay();
-                await updateLevelBar();
-                await updateMedalCount();
-                await updatePPCount();
+                await setProfileStatsContainer();
+                await setModeIcons();
+                await setLevelBar();
+                await setMedalCount();
+                await setPPCount();
                 await setStats();
             }
 
@@ -520,14 +568,25 @@
             container.dataset.scoreId = score.id;
 
             const title = container.querySelector('.play-detail__title');
-            const comboText = `${score.max_combo.toLocaleString()}x`;
+            const comboText = `${score.max_combo.toLocaleString('en-US')}x`;
+
+            const lazer = helpers.isLazer();
+            const modeHitTypes = {
+                osu:    ['great', 'ok', 'meh', 'miss'],
+                taiko:  ['great', 'ok', 'miss'],
+                fruits: ['great', 'large_tick_hit', 'small_tick_hit', 'miss'],
+                mania:  ['perfect', 'great', 'good', 'ok', 'meh', 'miss'],
+            };
+            const scoreDetailsText = (modeHitTypes[userData.current_mode])
+                .map(stat => (score.statistics[stat] || 0).toLocaleString('en-US'))
+                .join(' / ');
 
             const scoreDetails = document.createElement('div');
             scoreDetails.className = 'play-detail__score';
             scoreDetails.innerHTML =
-                `${(score.legacy_total_score || score.classic_total_score).toLocaleString()} | ` +
+                `${lazer ? `${(score.total_score).toLocaleString('en-US')} (${(score.legacy_total_score || score.classic_total_score).toLocaleString('en-US')})` : (score.legacy_total_score || score.classic_total_score).toLocaleString('en-US')} | ` +
                 `${score.is_perfect_combo ? `<span style="color: hsl(90,100%,70%)">${comboText}</span>` : comboText} | ` +
-                `${(score.statistics.great || 0).toLocaleString()} / ${(score.statistics.ok || 0).toLocaleString()} / ${(score.statistics.meh || 0).toLocaleString()} / ${(score.statistics.miss || 0).toLocaleString()}`;
+                scoreDetailsText;
             title.after(scoreDetails);
 
             container.querySelector('.play-detail__beatmap').textContent = `${score.beatmap.version} (★${score.beatmap.difficulty_rating.toFixed(2)})`;
