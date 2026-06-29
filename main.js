@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.5
+// @version      0.0.6
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -522,10 +522,7 @@
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Match popup size to osu page</li>
-                        <li>- Add coloured mode icons for profile page</li>
-                        <li>- Add mode/lazer based hit-type labels to profile stats</li>
-                        <li>- Add lazer score for score details (if lazer mode is enabled)</li>
+                        <li>- Add icon when a users mutual status changes in friends list</li>
                     </ul>
                 `;
 
