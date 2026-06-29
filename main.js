@@ -446,7 +446,7 @@
             const userAnchors = document.querySelectorAll('a[href^="https://osu.ppy.sh/users/"]');
 
             for (const userAnchor of userAnchors) {
-                const uid = userAnchor.href.match(/\/users\/(\d+)/)[1];
+                const uid = userAnchor.href.split('/').pop();
                 const userContainer = (await helpers.getElement(`a[href="https://osu.ppy.sh/users/${uid}"]`))?.parentElement;
                 const mutualStatus = viewType === 'brick' ? userContainer.classList.contains('user-card-brick--mutual') : !!userContainer.querySelector('.user-action-button--mutual');
 
