@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.4
+// @version      0.0.5
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -440,6 +440,52 @@
             window.dispatchEvent(new Event('resize'));
         }
 
+        async function setFriends() {
+            const viewType = (await helpers.getElement('.user-list__view-mode--active'))?.dataset.value;
+            const friendsData = JSON.parse(await GM.getValue('friendsData', '{}'));
+            const userAnchors = document.querySelectorAll('a[href^="https://osu.ppy.sh/users/"]');
+
+            for (const userAnchor of userAnchors) {
+                const uid = userAnchor.href.match(/\/users\/(\d+)/)[1];
+                const userContainer = (await helpers.getElement(`a[href="https://osu.ppy.sh/users/${uid}"]`))?.parentElement;
+                const mutualStatus = viewType === 'brick' ? userContainer.classList.contains('user-card-brick--mutual') : !!userContainer.querySelector('.user-action-button--mutual');
+
+                if (!(uid in friendsData)) {
+                    friendsData[uid] = { uid, mutual: mutualStatus };
+                    continue;
+                }
+
+                if (friendsData[uid].mutual === mutualStatus) continue;
+
+                const mutualStatusIcon = document.createElement('span');
+                mutualStatusIcon.textContent = '●';
+                mutualStatusIcon.style.position = 'absolute';
+                mutualStatusIcon.style.top = '-4px';
+                mutualStatusIcon.style.right = '-4px';
+                mutualStatusIcon.style.fontSize = '10px';
+                mutualStatusIcon.style.color = '#FFFF00';
+
+                if (viewType === 'brick') {
+                    userContainer.appendChild(mutualStatusIcon);
+                } else {
+                    const mutualButton = userContainer.querySelector('.user-action-button--mutual') ?? userContainer.querySelector('.user-action-button--friend');
+                    mutualButton.style.position = 'relative';
+                    mutualButton.appendChild(mutualStatusIcon);
+                }
+
+                friendsData[uid].mutual = mutualStatus;
+            }
+
+            for (const uid in friendsData) {
+                const uidExists = [...userAnchors].some(userAnchor => userAnchor.href.match(/\/users\/(\d+)/)[1] === uid);
+                if (!uidExists) {
+                    delete friendsData[uid];
+                }
+            }
+
+            await GM.setValue('friendsData', JSON.stringify(friendsData));
+        }
+
         async function setPopup() {
             let popuptitleText = null;
             let popupVersionText = null;
@@ -544,6 +590,10 @@
                 await setMedalCount();
                 await setPPCount();
                 await setStats();
+            }
+
+            if (window.location.pathname.startsWith('/home/friends')) {
+                await setFriends();
             }
 
             console.log(`Finished run`);
