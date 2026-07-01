@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.6
+// @version      0.0.7
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -18,6 +18,7 @@
 
     const mutationObservers = [];
     const userScoresMaps = new Map();
+    const scoreRankDataCache = new Map();
     let userData = null;
     let xhrCaptureSet = false;
 
@@ -123,11 +124,15 @@
         },
 
         isLazer() {
-            if(document.querySelector("button[data-url=\"https://osu.ppy.sh/home/account/options?user_profile_customization%5Blegacy_score_only%5D=1\"] span.fas")) {
+            if(document.querySelector('button[data-url=\"https://osu.ppy.sh/home/account/options?user_profile_customization%5Blegacy_score_only%5D=1\"] span.fas')) {
                 return true;
             }
 
             return false;
+        },
+
+        modeNameToInt(mode) {
+            return ['osu', 'taiko', 'fruits', 'mania'].indexOf(mode);
         }
     }
 
@@ -522,7 +527,7 @@
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Add icon when a users mutual status changes in friends list</li>
+                        <li>- Add score ranking to user page</li>
                     </ul>
                 `;
 
@@ -568,12 +573,170 @@
             createPopup();
         }
 
+        async function setScoreRank() {
+            // fix banned users issue :v
+            try {
+                await helpers.getElement('.profile-detail-stats__values'); // make sure thats loaded before doing anything else
+
+                const dailyChallengeContainer = document.querySelector('.profile-detail-stats__values:has(.daily-challenge__name)');
+                if (dailyChallengeContainer && dailyChallengeContainer.querySelectorAll('.daily-challenge__name').length > 1) {
+                    dailyChallengeContainer.style.flexDirection = 'column';
+                    dailyChallengeContainer.style.alignItems = 'flex-end';
+                }
+
+                const rankContainer = document.querySelector('.profile-detail-stats__values:has(.value-display--rank)');
+
+                const globalRankWrapper = document.createElement('div');
+                globalRankWrapper.style.display = 'flex';
+                globalRankWrapper.style.flexDirection = dailyChallengeContainer ? 'column' : 'row';
+                globalRankWrapper.style.gap = '20px';
+
+                const rankItems = rankContainer.querySelectorAll('.value-display--rank');
+                for (const rankItem of rankItems) {
+                    globalRankWrapper.append(rankItem);
+                }
+
+                // make this a resusable function smh
+                const tooltipStyle = document.createElement('style');
+                tooltipStyle.textContent = `
+                    .osuwebplus-tooltip-wrapper {
+                        position: relative;
+                        display: inline-block;
+                    }
+                    .osuwebplus-tooltip-wrapper .osuwebplus-tooltip-content {
+                        padding: 7px 19px;
+                        background-color: hsl(255deg,10%,10%);
+                        color: #fff;
+                        border-radius: 4px;
+                        pointer-events: none;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        visibility: hidden;
+                        opacity: 0;
+                        position: absolute;
+                        top: calc(100% + 10px);
+                        left: 0;
+                        transition: opacity 0.25s ease;
+                        z-index: 15001;
+                    }
+                    .osuwebplus-tooltip-wrapper .osuwebplus-tooltip-content::after {
+                        content: '';
+                        position: absolute;
+                        bottom: 100%;
+                        left: 4px;
+                        width: 10px;
+                        height: 8px;
+                        background-color: hsl(255deg,10%,10%);
+                        clip-path: polygon(0 100%, 0 0, 100% 100%);
+                    }
+                    .osuwebplus-tooltip-wrapper:hover .osuwebplus-tooltip-content {
+                        visibility: visible;
+                        opacity: 1;
+                    }
+                `;
+                document.head.appendChild(tooltipStyle);
+
+                const scoreRankingWrapper = document.createElement('div');
+
+                const ScoreRankingContainer = globalRankWrapper.querySelector('.value-display').cloneNode(true);
+                ScoreRankingContainer.classList.add('osuwebplus-tooltip-wrapper');
+
+                const scoreRankingLabel = ScoreRankingContainer.querySelector('.value-display__label');
+                scoreRankingLabel.textContent = 'Score Ranking';
+
+                const scoreRankingValue = ScoreRankingContainer.querySelector('.value-display__value');
+                scoreRankingValue.textContent = '-';
+
+                scoreRankingWrapper.append(ScoreRankingContainer);
+                rankContainer.append(globalRankWrapper, scoreRankingWrapper);
+
+                let scoreRankData = scoreRankDataCache.get(`${userData.user.id}:${userData.current_mode}`);
+
+                if (!scoreRankData) {
+                    const response = await fetch(`https://score.respektive.pw/u/${userData.user.id}?m=${helpers.modeNameToInt(userData.current_mode)}`);
+                    const data = (await response.json())[0];
+                    if (data.rank === 0) return;
+
+                    scoreRankData = { ...data, highestRankData: null };
+                    scoreRankDataCache.set(`${userData.user.id}:${userData.current_mode}`, scoreRankData);
+                }
+
+                const scoreRankingTooltip = document.createElement('div');
+                scoreRankingTooltip.className = 'osuwebplus-tooltip-content';
+                scoreRankingTooltip.textContent = 'Loading';
+                ScoreRankingContainer.append(scoreRankingTooltip);
+
+                scoreRankingValue.textContent = `#${scoreRankData.rank.toLocaleString('en-US')}`;
+
+                const scoreTierColors = [
+                    { value: 10, colors: ['#ffe600', '#ed82ff'] },
+                    { value: 45, colors: ['#97dcff', '#ed82ff'] },
+                    { value: 160, colors: ['#d9f8d3', '#a0cf96'] },
+                    { value: 450, colors: ['#a8f0ef', '#52e0df'] },
+                    { value: 1100, colors: ['#f0e4a8', '#e0c952'] },
+                    { value: 2400, colors: ['#e0e0eb', '#a3a3c2'] },
+                    { value: 4600, colors: ['#b88f7a', '#855c47'] },
+                    { value: 7500, colors: ['#bab3ab', '#bab3ab'] },
+                ].find(tier => scoreRankData.rank <= tier.value);
+
+                if (scoreTierColors) {
+                    scoreRankingValue.style.fontWeight = 'bold';
+                    scoreRankingValue.style.background = `linear-gradient(180deg, ${scoreTierColors.colors[0]}, ${scoreTierColors.colors[1]})`;
+                    scoreRankingValue.style.webkitBackgroundClip = 'text';
+                    scoreRankingValue.style.backgroundClip = 'text';
+                    scoreRankingValue.style.color = 'transparent';
+                }
+
+                function setTooltipContent (highestRankData) {
+                    scoreRankingTooltip.innerHTML =
+                        `Highest rank: #${scoreRankData.rank_highest.rank.toLocaleString('en-US')} on ${new Date(scoreRankData.rank_highest.updated_at).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}<br>` +
+                        `Score to next rank: ${scoreRankData.next ? `${(scoreRankData.next.score - scoreRankData.score).toLocaleString('en-US')} (${scoreRankData.next.username})` : '-'}<br>` +
+                        `Score to highest rank: ${highestRankData ? `${(highestRankData.score - scoreRankData.score).toLocaleString('en-US')} (${highestRankData.username})` : '-'}`
+                };
+
+                setTooltipContent(scoreRankData.highestRankData);
+
+                if (scoreRankData.rank > scoreRankData.rank_highest.rank && !scoreRankData.highestRankData) {
+                    let loading = false;
+
+                    async function setHighestRankData() {
+                        if (loading) return;
+                        loading = true;
+
+                        try {
+                            const response2 = await fetch(`https://score.respektive.pw/rank/${scoreRankData.rank_highest.rank}?m=${helpers.modeNameToInt(userData.current_mode)}`);
+                            const data2 = (await response2.json())[0];
+
+                            scoreRankData.highestRankData = data2;
+                            setTooltipContent(data2);
+
+                            ScoreRankingContainer.removeEventListener('mouseenter', setHighestRankData);
+                        } catch (error) {
+                            console.log(error);
+                        } finally {
+                            loading = false;
+                        }
+                    };
+
+                    ScoreRankingContainer.addEventListener('mouseenter', setHighestRankData);
+                }
+            } catch (error) {
+                console.log(error);
+                return;
+            }
+        }
+
         try {
             console.log(`Page loaded (${window.location.href})`);
 
             await setPopup();
 
             if (window.location.pathname.startsWith('/users/')) {
+                // if (await helpers.getElementByText('h1', 'User not found! ;_;')) {
+                //     console.log('Banned user');
+                //     return;
+                // }
+
                 await setUserData();
 
                 if (!xhrCaptureSet) {
@@ -587,6 +750,7 @@
                 await setMedalCount();
                 await setPPCount();
                 await setStats();
+                await setScoreRank();
             }
 
             if (window.location.pathname.startsWith('/home/friends')) {
