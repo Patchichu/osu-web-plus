@@ -13,12 +13,26 @@
 // @downloadURL  https://raw.githubusercontent.com/Patchichu/osu-web-plus/refs/heads/main/main.js
 // ==/UserScript==
 
+// todo:
+// use ternary operators instead of if else in certain places
+// make the tooltip in setScoreRank a reusable function
+// name functions better ffs
+// add background button on beatmap page
+// add a settings section to toggle things
+// level bar using playtime instead of totalscore?
+// old style rank images?
+// make color tiers reusable
+// country color tier?
+// ability to label blocked users?
+// fix level values on non-played profiles
+// make ranking section auto wrap
+
 (function() {
     'use strict';
 
     const mutationObservers = [];
-    const userScoresMaps = new Map();
-    const scoreRankDataCache = new Map();
+    const userScoresMap = new Map();
+    const scoreRankData = new Map();
     let userData = null;
     let xhrCaptureSet = false;
 
@@ -33,8 +47,8 @@
         getScoresMap() {
             const key = `${userData.user.id}:${userData.current_mode}`;
 
-            if (!userScoresMaps.has(key)) {
-                userScoresMaps.set(key, {
+            if (!userScoresMap.has(key)) {
+                userScoresMap.set(key, {
                     firsts: new Map(),
                     best: new Map(),
                     pinned: new Map(),
@@ -43,7 +57,7 @@
                 });
             }
 
-            return userScoresMaps.get(key);
+            return userScoresMap.get(key);
         },
 
         getElement(element) {
@@ -574,7 +588,6 @@
         }
 
         async function setScoreRank() {
-            // fix banned users issue :v
             try {
                 await helpers.getElement('.profile-detail-stats__values'); // make sure thats loaded before doing anything else
 
@@ -596,7 +609,6 @@
                     globalRankWrapper.append(rankItem);
                 }
 
-                // make this a resusable function smh
                 const tooltipStyle = document.createElement('style');
                 tooltipStyle.textContent = `
                     .osuwebplus-tooltip-wrapper {
@@ -650,15 +662,15 @@
                 scoreRankingWrapper.append(ScoreRankingContainer);
                 rankContainer.append(globalRankWrapper, scoreRankingWrapper);
 
-                let scoreRankData = scoreRankDataCache.get(`${userData.user.id}:${userData.current_mode}`);
+                let userScoreRankData = scoreRankData.get(`${userData.user.id}:${userData.current_mode}`);
 
-                if (!scoreRankData) {
+                if (!userScoreRankData) {
                     const response = await fetch(`https://score.respektive.pw/u/${userData.user.id}?m=${helpers.modeNameToInt(userData.current_mode)}`);
                     const data = (await response.json())[0];
                     if (data.rank === 0) return;
 
-                    scoreRankData = { ...data, highestRankData: null };
-                    scoreRankDataCache.set(`${userData.user.id}:${userData.current_mode}`, scoreRankData);
+                    userScoreRankData = { ...data, highestRankData: null };
+                    scoreRankData.set(`${userData.user.id}:${userData.current_mode}`, userScoreRankData);
                 }
 
                 const scoreRankingTooltip = document.createElement('div');
@@ -666,7 +678,7 @@
                 scoreRankingTooltip.textContent = 'Loading';
                 ScoreRankingContainer.append(scoreRankingTooltip);
 
-                scoreRankingValue.textContent = `#${scoreRankData.rank.toLocaleString('en-US')}`;
+                scoreRankingValue.textContent = `#${userScoreRankData.rank.toLocaleString('en-US')}`;
 
                 const scoreTierColors = [
                     { value: 10, colors: ['#ffe600', '#ed82ff'] },
@@ -677,7 +689,7 @@
                     { value: 2400, colors: ['#e0e0eb', '#a3a3c2'] },
                     { value: 4600, colors: ['#b88f7a', '#855c47'] },
                     { value: 7500, colors: ['#bab3ab', '#bab3ab'] },
-                ].find(tier => scoreRankData.rank <= tier.value);
+                ].find(tier => userScoreRankData.rank <= tier.value);
 
                 if (scoreTierColors) {
                     scoreRankingValue.style.fontWeight = 'bold';
@@ -689,14 +701,14 @@
 
                 function setTooltipContent (highestRankData) {
                     scoreRankingTooltip.innerHTML =
-                        `Highest rank: #${scoreRankData.rank_highest.rank.toLocaleString('en-US')} on ${new Date(scoreRankData.rank_highest.updated_at).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}<br>` +
-                        `Score to next rank: ${scoreRankData.next ? `${(scoreRankData.next.score - scoreRankData.score).toLocaleString('en-US')} (${scoreRankData.next.username})` : '-'}<br>` +
-                        `Score to highest rank: ${highestRankData ? `${(highestRankData.score - scoreRankData.score).toLocaleString('en-US')} (${highestRankData.username})` : '-'}`
+                        `Highest rank: #${userScoreRankData.rank_highest.rank.toLocaleString('en-US')} on ${new Date(userScoreRankData.rank_highest.updated_at).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}<br>` +
+                        `Score to next rank: ${userScoreRankData.next ? `${Math.max(userScoreRankData.next.score - userData.user.statistics.ranked_score, 0).toLocaleString('en-US')} (${userScoreRankData.next.username})` : '-'}<br>` +
+                        `Score to highest rank: ${highestRankData ? `${Math.max(highestRankData.score - userData.user.statistics.ranked_score, 0).toLocaleString('en-US')} (${highestRankData.username})` : '-'}`
                 };
 
-                setTooltipContent(scoreRankData.highestRankData);
+                setTooltipContent(userScoreRankData.highestRankData);
 
-                if (scoreRankData.rank > scoreRankData.rank_highest.rank && !scoreRankData.highestRankData) {
+                if (userScoreRankData.rank > userScoreRankData.rank_highest.rank && !userScoreRankData.highestRankData) {
                     let loading = false;
 
                     async function setHighestRankData() {
@@ -704,11 +716,11 @@
                         loading = true;
 
                         try {
-                            const response2 = await fetch(`https://score.respektive.pw/rank/${scoreRankData.rank_highest.rank}?m=${helpers.modeNameToInt(userData.current_mode)}`);
-                            const data2 = (await response2.json())[0];
+                            const response = await fetch(`https://score.respektive.pw/rank/${userScoreRankData.rank_highest.rank}?m=${helpers.modeNameToInt(userData.current_mode)}`);
+                            const data = (await response.json())[0];
 
-                            scoreRankData.highestRankData = data2;
-                            setTooltipContent(data2);
+                            userScoreRankData.highestRankData = data;
+                            setTooltipContent(data);
 
                             ScoreRankingContainer.removeEventListener('mouseenter', setHighestRankData);
                         } catch (error) {
@@ -732,10 +744,10 @@
             await setPopup();
 
             if (window.location.pathname.startsWith('/users/')) {
-                // if (await helpers.getElementByText('h1', 'User not found! ;_;')) {
-                //     console.log('Banned user');
-                //     return;
-                // }
+                if (await helpers.getElement('.osu-page') && document.querySelector('h1')?.textContent.trim() === 'User not found! ;_;') {
+                    console.log('Banned user');
+                    return;
+                }
 
                 await setUserData();
 
