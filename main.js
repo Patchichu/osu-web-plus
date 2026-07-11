@@ -852,7 +852,7 @@
     const eventList = [
         {
             eventName: 'scores:tops-updated',
-            sections: [['Best Performance', 'best'], ['First Place Ranks', 'firsts'], ['Pinned Scores', 'pinned']],
+            sections: [['Best Performance', 'best'], ['First Place Scores', 'firsts'], ['Pinned Scores', 'pinned']],
             observe: false
         },
         {
@@ -869,7 +869,7 @@
         },
         {
             eventName: 'scores:firsts-updated',
-            sections: [['First Place Ranks', 'firsts']]
+            sections: [['First Place Scores', 'firsts']]
         },
         {
             eventName: 'scores:historical-updated',
