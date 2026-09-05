@@ -541,7 +541,7 @@
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Add score ranking to user page</li>
+                        <li>- Fix first place scores section</li>
                     </ul>
                 `;
 
