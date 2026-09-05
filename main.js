@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.7
+// @version      0.0.8
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
