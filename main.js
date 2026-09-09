@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu! Web+
 // @namespace    http://tampermonkey.net/
-// @version      0.0.8
+// @version      0.0.9
 // @author       Patchi
 // @match        https://osu.ppy.sh/*
 // @match        https://lazer.ppy.sh/*
@@ -541,7 +541,7 @@
                     <b>Version:</b> ${popupVersionText}<br>
                     <b>Notes:</b><br>
                     <ul style="list-style: none; padding-left: 10px;">
-                        <li>- Fix first place scores section</li>
+                        <li>- Add background button to beatmapset page</li>
                     </ul>
                 `;
 
@@ -738,6 +738,31 @@
             }
         }
 
+        async function setBackgroundButton() {
+            if (document.querySelector('.btn-osu-big .fa-image')) return;
+
+            const heartButton = (await helpers.getElement('.btn-osu-big__content .far.fa-heart')).closest('.btn-osu-big');
+
+            const backgroundButton = heartButton.cloneNode(true);
+            backgroundButton.removeAttribute('title');
+
+            const backgroundButtonIcon = backgroundButton.querySelector('.far.fa-heart');
+            backgroundButtonIcon.classList.replace('fa-heart', 'fa-image');
+
+            heartButton.after(backgroundButton);
+
+            const beatmapSetId = window.location.pathname.split('/')[2];
+            const fullsizeUrl = `https://assets.ppy.sh/beatmaps/${beatmapSetId}/covers/fullsize.jpg`;
+            const coverUrl = `https://assets.ppy.sh/beatmaps/${beatmapSetId}/covers/cover.jpg`;
+
+            backgroundButton.addEventListener('click', () => {
+                const image = new Image();
+                image.onload = () => window.open(fullsizeUrl, '_blank');
+                image.onerror = () => window.open(coverUrl, '_blank');
+                image.src = fullsizeUrl;
+            });
+        }
+
         try {
             console.log(`Page loaded (${window.location.href})`);
 
@@ -767,6 +792,10 @@
 
             if (window.location.pathname.startsWith('/home/friends')) {
                 await setFriends();
+            }
+
+            if (window.location.pathname.startsWith('/beatmapsets')) {
+                await setBackgroundButton();
             }
 
             console.log(`Finished run`);
